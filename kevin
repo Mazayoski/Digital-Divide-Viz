@@ -1,1 +1,41 @@
+Make sure to put pip install matplotlib into terminal to install this mapping plot then the code can run 
+also this is juts a roughdfrat all this shows is bar grpahs. We could make seperate onmes and also one for average house prives 
+we can maybe add a scatter plot too  if anyone knows how to use R then this is what I did bassically but in phyton
 
+import matplotlib.pyplot as plt
+import numpy as np
+
+#We put data for 2022
+average_income_national_2022 = 1000  # we replace with national average income for 2022
+average_home_price_2022 = 1000     # wereplace with average home price for 2022
+
+# Average income by state for 2022
+states = ["California", "Texas", "Florida", "New York", "Illinois"] # we can add all states 
+average_income_by_state_2022 = [25000, 50000, 100000, 150000, 200000]  # we add actaull aveage numbers these are place holders 
+#Also it goes in order foe example it will be California = 25,000 then Florida 50000 etc.
+# figure and axes
+fig, ax = plt.subplots(figsize=(10, 6))
+
+# Bar positions
+x = np.arange(len(states) + 2)  # extra space for national income and home price
+
+# Plotting bars
+ax.bar(x[0], average_income_national_2022, width=0.5, color="blue", label="National Avg Income (2022)")
+ax.bar(x[1], average_home_price_2022, width=0.5, color="green", label="Avg Home Price (2022)")
+
+# Plotting bars for each state
+ax.bar(x[2:], average_income_by_state_2022, width=0.5, color="purple", label="State Avg Income (2022)")
+
+# Custom x-axis labels
+ax.set_xticks(x)
+ax.set_xticklabels(["National Income", "Home Price"] + states)
+
+# Adding title and labels
+ax.set_title("Average Home Income Nationally and Per State for 2022")
+ax.set_ylabel("Amount in USD")
+
+# Add legend
+ax.legend()
+
+# Show the plot
+plt.show()
