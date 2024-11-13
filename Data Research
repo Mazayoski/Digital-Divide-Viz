@@ -4,7 +4,14 @@ https://www2.census.gov/geo/tiger/TIGER2024/
 # race demographics - https://www.arcgis.com/home/item.html?id=b0232184dfd44b709071bd33224c19aa
 Project idea 1- internet accesibility to race density by county
 Project idea 2- internet by provider national map
-Project idea 3- average income to housing prices *
+Project idea 3- average income to housing prices by race *
 Average household income- https://www.arcgis.com/home/item.html?id=702bd623b3614b4184f94947c18b75c8
 median home value - https://www.arcgis.com/home/item.html?id=85bf74bd2b6243ac8ce2556028cd592f
 both 2022^
+
+Have a map of US where counties are interactive, can press on a county and it will have the statistics within of each race with average income, home value, and density.
+tool extracts this data(can specify by which race) to compare in a xlsx file where the stats are listed. each stat will be red or green based on which is greater.
+can also list % difference as well as numerical difference 
+
+presntation idea: slide show with extent of us, then to state, then to particuluar county, show county attribute table, then show extract tool(include different options)
+then show the pulled file with different statistics highlighting the utility of the tool
