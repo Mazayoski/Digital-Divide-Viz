@@ -1,0 +1,64 @@
+import arcpy
+import pandas as pd
+from openpyxl import load_workbook
+from openpyxl.styles import PatternFill
+
+# Define paths to feature classes or data tables
+race_data_path = 'path/to/race_data'  # Replace with actual path
+income_data_path = 'path/to/income_data'  # Replace with actual path
+home_value_data_path = 'path/to/home_value_data'  # Replace with actual path
+
+# Define output Excel file path
+output_file = 'path/to/output.xlsx'
+
+# Parameters for filtering (e.g., input by user in the tool)
+county_name = 'Input County Name'  # Placeholder, replace with tool parameter
+specific_race_filter = 'Race Filter'  # Placeholder, replace with tool parameter
+
+# Load race data
+race_df = pd.DataFrame.spatial.from_table(race_data_path)
+income_df = pd.DataFrame.spatial.from_table(income_data_path)
+home_value_df = pd.DataFrame.spatial.from_table(home_value_data_path)
+
+# Merge data based on county identifier (e.g., 'County_ID')
+merged_df = pd.merge(race_df, income_df, on='County_ID', how='inner')
+merged_df = pd.merge(merged_df, home_value_df, on='County_ID', how='inner')
+
+# Filter by specified county
+county_df = merged_df[merged_df['County_Name'] == county_name]
+
+# Filter by specific race if provided
+if specific_race_filter:
+    county_df = county_df[county_df['Race'] == specific_race_filter]
+
+# Create an Excel writer object
+with pd.ExcelWriter(output_file, engine='openpyxl') as writer:
+    county_df.to_excel(writer, index=False, sheet_name='County Data')
+
+# Load workbook for styling
+wb = load_workbook(output_file)
+ws = wb['County Data']
+
+# Define color fills for conditional formatting
+green_fill = PatternFill(start_color='00FF00', end_color='00FF00', fill_type='solid')
+red_fill = PatternFill(start_color='FF0000', end_color='FF0000', fill_type='solid')
+
+# Apply conditional formatting to highlight highest and lowest average income
+income_col = 'Average_Income'  # Adjust based on column name in the DataFrame
+race_col = 'Race'  # Adjust based on column name
+
+# Find max and min incomes
+max_income = county_df[income_col].max()
+min_income = county_df[income_col].min()
+
+for row in range(2, ws.max_row + 1):
+    income_value = ws[f'{income_col}{row}'].value
+    if income_value == max_income:
+        ws[f'{income_col}{row}'].fill = green_fill
+    elif income_value == min_income:
+        ws[f'{income_col}{row}'].fill = red_fill
+
+# Save the styled workbook
+wb.save(output_file)
+
+print(f'Data extracted and saved to {output_file} with conditional formatting.')
