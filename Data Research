@@ -15,3 +15,6 @@ can also list % difference as well as numerical difference
 
 presntation idea: slide show with extent of us, then to state, then to particuluar county, show county attribute table, then show extract tool(include different options)
 then show the pulled file with different statistics highlighting the utility of the tool
+
+For data extracton- map is going to show the US by race including state and county. Extract all race data, and to the data avg income and home price by race. May need to make
+new data source that is a combination of them all
