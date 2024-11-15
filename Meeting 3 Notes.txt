@@ -1,0 +1,7 @@
+MEETING 3 NOTES
+
+Goals for the weekend:
+* Extract data from for counties/states
+* Combine extracted data into a single file
+* Upload that individual file to Team Drive and test it out in VS Code editor
+* If it doesn't work, then upload combined data file into individual GitHubs locally
