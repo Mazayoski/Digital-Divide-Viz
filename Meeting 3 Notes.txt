@@ -5,3 +5,5 @@ Goals for the weekend:
 * Combine extracted data into a single file
 * Upload that individual file to Team Drive and test it out in VS Code editor
 * If it doesn't work, then upload combined data file into individual GitHubs locally
+* Create PowerPoint/Slides presentation showing progress
+* 
