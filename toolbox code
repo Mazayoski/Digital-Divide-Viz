@@ -1,0 +1,146 @@
+# -*- coding: utf-8 -*-
+
+import arcpy
+import pandas as pd
+from openpyxl import load_workbook
+from openpyxl.styles import PatternFill
+
+class Toolbox(object):
+    def __init__(self):
+        """Define the toolbox (the name of the toolbox is the name of the .pyt file)."""
+        self.label = "Data Analysis Toolbox"
+        self.alias = "data_analysis_toolbox"
+
+        # List of tool classes associated with this toolbox
+        self.tools = [DataExtractionTool]
+
+class DataExtractionTool(object):
+    def __init__(self):
+        """Define the tool (tool name is the name of the class)."""
+        self.label = "Data Extraction and Styling Tool"
+        self.description = "Extracts data, filters by county and race, and applies conditional formatting."
+        self.canRunInBackground = False
+
+    def getParameterInfo(self):
+        """Define parameter definitions"""
+        params = []
+
+        # Input race data parameter
+        param1 = arcpy.Parameter(
+            displayName="Race Data Path",
+            name="race_data_path",
+            datatype="DEFeatureClass",
+            parameterType="Required",
+            direction="Input"
+        )
+        params.append(param1)
+
+        # Input income data parameter
+        param2 = arcpy.Parameter(
+            displayName="Income Data Path",
+            name="income_data_path",
+            datatype="DEFeatureClass",
+            parameterType="Required",
+            direction="Input"
+        )
+        params.append(param2)
+
+        # Input home value data parameter
+        param3 = arcpy.Parameter(
+            displayName="Home Value Data Path",
+            name="home_value_data_path",
+            datatype="DEFeatureClass",
+            parameterType="Required",
+            direction="Input"
+        )
+        params.append(param3)
+
+        # Output Excel file parameter
+        param4 = arcpy.Parameter(
+            displayName="Output Excel File",
+            name="output_file",
+            datatype="DEFile",
+            parameterType="Required",
+            direction="Output"
+        )
+        params.append(param4)
+
+        # County name parameter
+        param5 = arcpy.Parameter(
+            displayName="County Name",
+            name="county_name",
+            datatype="GPString",
+            parameterType="Required",
+            direction="Input"
+        )
+        params.append(param5)
+
+        # Specific race filter parameter
+        param6 = arcpy.Parameter(
+            displayName="Specific Race Filter",
+            name="specific_race_filter",
+            datatype="GPString",
+            parameterType="Optional",
+            direction="Input"
+        )
+        params.append(param6)
+
+        return params
+
+    def execute(self, parameters, messages):
+        """The source code of the tool."""
+        # Unpack parameters
+        race_data_path = parameters[0].valueAsText
+        income_data_path = parameters[1].valueAsText
+        home_value_data_path = parameters[2].valueAsText
+        output_file = parameters[3].valueAsText
+        county_name = parameters[4].valueAsText
+        specific_race_filter = parameters[5].valueAsText
+
+        # Load data using pandas and spatial extension
+        race_df = pd.DataFrame.spatial.from_table(race_data_path)
+        income_df = pd.DataFrame.spatial.from_table(income_data_path)
+        home_value_df = pd.DataFrame.spatial.from_table(home_value_data_path)
+
+        # Merge data based on county identifier (e.g., 'County_ID')
+        merged_df = pd.merge(race_df, income_df, on='County_ID', how='inner')
+        merged_df = pd.merge(merged_df, home_value_df, on='County_ID', how='inner')
+
+        # Filter by specified county
+        county_df = merged_df[merged_df['County_Name'] == county_name]
+
+        # Filter by specific race if provided
+        if specific_race_filter:
+            county_df = county_df[county_df['Race'] == specific_race_filter]
+
+        # Create an Excel writer object
+        with pd.ExcelWriter(output_file, engine='openpyxl') as writer:
+            county_df.to_excel(writer, index=False, sheet_name='County Data')
+
+        # Load workbook for styling
+        wb = load_workbook(output_file)
+        ws = wb['County Data']
+
+        # Define color fills for conditional formatting
+        green_fill = PatternFill(start_color='00FF00', end_color='00FF00', fill_type='solid')
+        red_fill = PatternFill(start_color='FF0000', end_color='FF0000', fill_type='solid')
+
+        # Apply conditional formatting to highlight highest and lowest average income
+        income_col = 'Average_Income'  # Adjust based on column name in the DataFrame
+
+        # Find max and min incomes
+        max_income = county_df[income_col].max()
+        min_income = county_df[income_col].min()
+
+        for row in range(2, ws.max_row + 1):
+            income_value = ws[f'{income_col}{row}'].value
+            if income_value == max_income:
+                ws[f'{income_col}{row}'].fill = green_fill
+            elif income_value == min_income:
+                ws[f'{income_col}{row}'].fill = red_fill
+
+        # Save the styled workbook
+        wb.save(output_file)
+
+        arcpy.AddMessage(f'Data extracted and saved to {output_file} with conditional formatting.')
+        return
