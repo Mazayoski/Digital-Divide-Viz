@@ -18,3 +18,6 @@ then show the pulled file with different statistics highlighting the utility of 
 
 For data extracton- map is going to show the US by race including state and county. Extract all race data, and to the data avg income and home price by race. May need to make
 new data source that is a combination of them all
+
+CURRENT PROBLEMS: defining the paths for all parameters, getting one gdb the tool can pull from potentially, drop down menu for counties, finishing slides
+heres a question, if i get all the data in one singular gdb, can the tool pull from the gdb instead of the layers. therefore the layers would be used for the visual aspect and the gdb would be for the code to use.
