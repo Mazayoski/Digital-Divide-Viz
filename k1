@@ -1,0 +1,46 @@
+import arcpy
+
+# Paths to layers based on hierarchy
+state_layer = "Map\\2022 USA Median Home Value\\State\\2022 Median Home Value (Esri)"
+county_layer = "Map\\2022 USA Median Home Value\\County\\2022 Median Home Value (Esri)"
+
+def get_data(state, county):
+    try:
+        # To verify layers exist
+        if not arcpy.Exists(state_layer) or not arcpy.Exists(county_layer):
+            print("One or both layers do not exist. Please check the layer paths.")
+            return
+
+        # Query for state-level data
+        state_query = f"State = '{state}'"
+        with arcpy.da.SearchCursor(state_layer, ["Median_Home_Value"], state_query) as cursor:
+            state_value = None
+            for row in cursor:
+                state_value = row[0]
+                break
+            if state_value is None:
+                print(f"No Median Home Value data found for state: {state}.")
+            else:
+                print(f"Median Home Value for state {state}: ${state_value:,}")
+
+        # Query for county-level data
+        county_query = f"State = '{state}' AND County = '{county}'"
+        with arcpy.da.SearchCursor(county_layer, ["Median_Home_Value"], county_query) as cursor:
+            county_value = None
+            for row in cursor:
+                county_value = row[0]
+                break
+            if county_value is None:
+                print(f"No Median Home Value data found for county: {county}, {state}.")
+            else:
+                print(f"Median Home Value for county {county}, {state}: ${county_value:,}")
+
+    except Exception as e:
+        print(f"Error: {e}")
+
+# We put a state and county
+State = "Texas"  #We put any state
+County = "Harris"  #replace with the county 
+
+# Call the function to retrieve data
+get_data(State, County)
