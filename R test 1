@@ -1,0 +1,18 @@
+```{r}
+# Load CSV file
+data <- read.csv("Counties by race.csv")
+
+# Select specific columns
+selected_columns <- c("NAME", "State", "P0010001")
+extracted_data <- data[selected_columns]
+
+# Filter data where population > 100,000 this is a test we change to other parameters
+filtered_data <- subset(extracted_data, P0010001 > 100000)
+
+# View filtered data
+print(filtered_data)
+
+# ve datasa
+write.csv(filtered_data, "filtered_data.csv", row.names = FALSE)
+
+```
