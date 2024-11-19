@@ -1,0 +1,185 @@
+# -*- coding: utf-8 -*-
+import arcpy
+import pandas as pd
+from openpyxl import load_workbook
+from openpyxl.styles import PatternFill
+import os
+
+
+def get_county_list(county_feature_class):
+    """Query the county feature class to get a list of all county names."""
+    county_list = []
+    if arcpy.Exists(county_feature_class):
+        with arcpy.da.SearchCursor(county_feature_class, ['County_Name']) as cursor:
+            for row in cursor:
+                county_list.append(row[0])  # Add county name to the list
+    else:
+        arcpy.AddError(f"County feature class does not exist: {county_feature_class}")
+    return county_list
+
+
+class Toolbox(object):
+    def __init__(self):
+        """Define the toolbox (the name of the toolbox is the name of the .pyt file)."""
+        self.label = "Data Analysis Toolbox"
+        self.alias = "data_analysis_toolbox"
+
+        # List of tool classes associated with this toolbox
+        self.tools = [DataExtractionTool]
+
+
+class DataExtractionTool(object):
+    def __init__(self):
+        """Define the tool (tool name is the name of the class)."""
+        self.label = "Data Extraction and Merging Tool"
+        self.description = "Extracts data from multiple feature layers, combines them, and applies conditional formatting."
+        self.canRunInBackground = False
+
+    def getParameterInfo(self):
+        """Define parameter definitions."""
+        params = []
+
+        # Input feature layers as multiple input parameters
+        param1 = arcpy.Parameter(
+            displayName="Feature Layers",
+            name="feature_layers",
+            datatype="DEFeatureClass",
+            parameterType="Required",
+            direction="Input",
+            multiValue=True  # Allows multiple inputs
+        )
+        params.append(param1)
+
+        # Output folder parameter (hardcoded, so not included in tool parameters)
+        # param2 is omitted.
+
+        # Query the county feature class to get a list of counties dynamically
+        county_feature_class = r"C:\Users\braed\OneDrive\Documents\ArcGIS\Packages\Project Draft_0b91e9\counties.gdb\Counties_ExportFeatures/County_Name"  # Replace with your path
+        county_list = get_county_list(county_feature_class)
+
+        # Dropdown for County selection
+        param3 = arcpy.Parameter(
+            displayName="Select County",
+            name="county_name",
+            datatype="GPString",
+            parameterType="Required",
+            direction="Input"
+        )
+        param3.filter.type = "ValueList"
+        param3.filter.list = county_list  # Populate with the list of counties from the feature class
+        params.append(param3)
+
+        # Dropdown for Race selection (allowing multiple selections)
+        param4 = arcpy.Parameter(
+            displayName="Select Race(s)",
+            name="specific_race_filter",
+            datatype="GPString",
+            parameterType="Optional",
+            direction="Input",
+            multiValue=True  # Allow multiple selections
+        )
+        param4.filter.type = "ValueList"
+        param4.filter.list = ['Native American', 'Asian', 'African American', 'Hispanic or Latino',
+                              'Native Hawaiian/Polynesian', 'two or more', 'White', 'Other']  # Match expected fields
+        params.append(param4)
+
+        return params
+
+    def execute(self, parameters, messages):
+        """The source code of the tool."""
+        # Unpack parameters
+        feature_layers = parameters[0].values  # List of feature layer paths
+        county_name = parameters[1].valueAsText  # Selected county
+        specific_race_filter = parameters[2].values  # List of selected races (optional)
+
+        # Hardcoded output folder
+        output_folder = r"C:\GEOG392 Final Project\Outputs"
+
+        # Ensure the output folder exists
+        if not os.path.exists(output_folder):
+            os.makedirs(output_folder)  # Create the folder if it doesn't exist
+
+        # Mapping of expected fields to potential alternatives
+        field_mapping = {
+            'County_Name': ['County_Name'],
+            'White': ['White'],
+            'African American': ['African_American', 'AfAm', 'Black'],
+            'Native American': ['Native_American', 'Indigenous'],
+            'Asian': ['Asian'],
+            'Native Hawaiian/Polynesian': ['Hawaiian', 'Polynesian'],
+            'two or more': ['TwoOrMore', 'Multi_Racial'],
+            'Hispanic or Latino': ['Hispanic', 'Latino'],
+            'Other': ['Other']
+        }
+
+        # Initialize an empty list to hold DataFrames
+        dataframes = []
+
+        for layer_path in feature_layers:
+            arcpy.AddMessage(f"Loading data from {layer_path}...")
+
+            # Dynamically find matching fields in the feature class
+            existing_fields = [f.name for f in arcpy.ListFields(layer_path)]
+            mapped_fields = {}
+            for expected, alternatives in field_mapping.items():
+                for alt in alternatives:
+                    if alt in existing_fields:
+                        mapped_fields[expected] = alt
+                        break
+
+            # Check if all required fields are mapped
+            if 'County_Name' not in mapped_fields:
+                arcpy.AddWarning(f"County_Name field not found in {layer_path}. Skipping layer.")
+                continue
+
+            if not mapped_fields:
+                arcpy.AddWarning(f"No matching fields found in {layer_path}. Skipping layer.")
+                continue
+
+            # Prepare a list of mapped field names for cursor
+            cursor_fields = list(mapped_fields.values())
+
+            # Extract data using the mapped fields
+            data = []
+            with arcpy.da.SearchCursor(layer_path, cursor_fields) as cursor:
+                for row in cursor:
+                    data.append(row)
+
+            if data:
+                df = pd.DataFrame(data, columns=mapped_fields.keys())
+                dataframes.append(df)
+            else:
+                arcpy.AddWarning(f"No data found in {layer_path}.")
+
+        # Combine all DataFrames into one
+        if dataframes:
+            combined_df = pd.concat(dataframes, ignore_index=True)
+            arcpy.AddMessage("Data successfully combined from all feature layers.")
+
+            # Filter by selected county
+            combined_df = combined_df[combined_df['County_Name'] == county_name]
+
+            # If specific race filter is selected, apply the filter
+            if specific_race_filter:
+                filter_columns = [col for col in specific_race_filter if col in combined_df.columns]
+                combined_df = combined_df[combined_df[filter_columns].any(axis=1)]
+
+            # Save combined data
+            output_path = os.path.join(output_folder, "Combined_Data.xlsx")
+            with pd.ExcelWriter(output_path, engine='openpyxl') as writer:
+                combined_df.to_excel(writer, index=False, sheet_name='Combined Data')
+
+            # Apply conditional formatting
+            wb = load_workbook(output_path)
+            ws = wb['Combined Data']
+            fill = PatternFill(start_color='FFFF00', end_color='FFFF00', fill_type='solid')
+            for row in ws.iter_rows(min_row=2, max_row=ws.max_row, min_col=1, max_col=ws.max_column):
+                for cell in row:
+                    cell.fill = fill
+            wb.save(output_path)
+
+            arcpy.AddMessage(f"Combined data saved to {output_path} as an Excel file.")
+        else:
+            arcpy.AddError("No data was found in the provided feature layers.")
+
+        return
