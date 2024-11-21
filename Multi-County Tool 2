@@ -1,0 +1,172 @@
+# -*- coding: utf-8 -*-
+import arcpy
+import pandas as pd
+from openpyxl import load_workbook
+from openpyxl.styles import PatternFill
+from openpyxl.utils import get_column_letter
+import os
+
+
+def get_county_list_from_excel(excel_path):
+    """Load unique county names from an Excel file."""
+    try:
+        df = pd.read_excel(excel_path, engine="openpyxl")
+        if 'County_Name' in df.columns:
+            county_list = df['County_Name'].dropna().unique().tolist()  # Ensure unique, non-null values
+            return county_list
+        else:
+            arcpy.AddError(f"'County_Name' column not found in {excel_path}.")
+            return []
+    except Exception as e:
+        arcpy.AddError(f"Failed to read Excel file: {e}")
+        return []
+
+
+class Toolbox(object):
+    def __init__(self):
+        """Define the toolbox (the name of the toolbox is the name of the .pyt file)."""
+        self.label = "Data Analysis Toolbox"
+        self.alias = "data_analysis_toolbox"
+        self.tools = [DataExtractionTool]
+
+
+class DataExtractionTool(object):
+    def __init__(self):
+        """Define the tool (tool name is the name of the class)."""
+        self.label = "Data Extraction and Merging Tool"
+        self.description = "Extracts data from multiple feature layers, combines them, and applies conditional formatting."
+        self.canRunInBackground = False
+
+    def getParameterInfo(self):
+        """Define parameter definitions."""
+        params = []
+
+        # Feature layers input
+        param1 = arcpy.Parameter(
+            displayName="Feature Layers",
+            name="feature_layers",
+            datatype="DEFeatureClass",
+            parameterType="Required",
+            direction="Input",
+            multiValue=True
+        )
+        params.append(param1)
+
+        # Output folder
+        param2 = arcpy.Parameter(
+            displayName="Output Folder",
+            name="output_folder",
+            datatype="DEFolder",
+            parameterType="Required",
+            direction="Output"
+        )
+        params.append(param2)
+
+        # County dropdown (populated from Excel)
+        county_excel_path = r"C:\GEOG392 Final Project\CountiesGDB\New Data.xlsx"
+        county_list = get_county_list_from_excel(county_excel_path)
+        param3 = arcpy.Parameter(
+            displayName="Select County/Counties",
+            name="county_names",
+            datatype="GPString",
+            parameterType="Required",
+            direction="Input",
+            multiValue=True
+        )
+        param3.filter.type = "ValueList"
+        param3.filter.list = county_list
+        params.append(param3)
+
+        # Race filter dropdown
+        param4 = arcpy.Parameter(
+            displayName="Select Race(s)",
+            name="specific_race_filter",
+            datatype="GPString",
+            parameterType="Optional",
+            direction="Input",
+            multiValue=True
+        )
+        param4.filter.type = "ValueList"
+        param4.filter.list = [
+            'Native American', 'Asian', 'African American', 'Hispanic or Latino',
+            'Native Hawaiian/Polynesian', 'Two or more', 'White', 'Other'
+        ]
+        params.append(param4)
+
+        return params
+
+    def execute(self, parameters, messages):
+        """The source code of the tool."""
+        feature_layers = parameters[0].values
+        output_folder = parameters[1].valueAsText
+        county_names = parameters[2].values  # Accept multiple county names
+        specific_race_filter = parameters[3].values
+
+        # Validate and create output directory
+        if not os.path.exists(output_folder):
+            os.makedirs(output_folder)
+
+        dataframes = []
+
+        for layer_path in feature_layers:
+            arcpy.AddMessage(f"Loading data from {layer_path}...")
+            if not arcpy.Exists(layer_path):
+                arcpy.AddWarning(f"Feature layer does not exist: {layer_path}")
+                continue
+
+            expected_fields = [field.name for field in arcpy.ListFields(layer_path)]
+
+            data = []
+            with arcpy.da.SearchCursor(layer_path, expected_fields) as cursor:
+                for row in cursor:
+                    data.append(row)
+
+            if data:
+                df = pd.DataFrame(data, columns=expected_fields)
+                dataframes.append(df)
+            else:
+                arcpy.AddWarning(f"No data found in {layer_path}.")
+
+        if dataframes:
+            combined_df = pd.concat(dataframes, ignore_index=True)
+            arcpy.AddMessage("Data successfully combined from all feature layers.")
+            combined_df = combined_df[combined_df['County_Name'].isin(county_names)]  # Filter for selected counties
+
+            if specific_race_filter:
+                combined_df = combined_df[['County_Name'] + specific_race_filter]
+
+            output_path = os.path.join(output_folder, "Combined_Data.xlsx")
+            with pd.ExcelWriter(output_path, engine='openpyxl') as writer:
+                combined_df.to_excel(writer, index=False, sheet_name='Combined Data')
+
+            wb = load_workbook(output_path)
+            ws = wb['Combined Data']
+
+            # Apply formatting and calculate percentage differences
+            for row_index in range(2, ws.max_row + 1):
+                row_values = [
+                    (col_index, ws.cell(row=row_index, column=col_index).value)
+                    for col_index in range(2, ws.max_column + 1)
+                    if isinstance(ws.cell(row=row_index, column=col_index).value, (int, float))
+                ]
+
+                if len(row_values) >= 2:
+                    max_val, min_val = max(row_values, key=lambda x: x[1]), min(row_values, key=lambda x: x[1])
+
+                    # Highlight cells
+                    ws.cell(row=row_index, column=max_val[0]).fill = PatternFill(start_color='00FF00', end_color='00FF00', fill_type='solid')
+                    ws.cell(row=row_index, column=min_val[0]).fill = PatternFill(start_color='FF0000', end_color='FF0000', fill_type='solid')
+
+                    # Add percentage difference
+                    diff_col = ws.max_column + 1
+                    if min_val[1] != 0:
+                        percentage_diff = ((max_val[1] - min_val[1]) / min_val[1]) * 100
+                        ws.cell(row=1, column=diff_col, value="Percent Difference")
+                        ws.cell(row=row_index, column=diff_col, value=percentage_diff)
+
+            wb.save(output_path)
+            arcpy.AddMessage(f"Combined data saved to {output_path} as an Excel file.")
+        else:
+            arcpy.AddError("No data was found in the provided feature layers.")
+
+        return
